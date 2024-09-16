@@ -12,8 +12,13 @@ import chroma from 'chroma-js';
 const App = () => {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(''); // 改为单选
   const mapRef = useRef(null);
+
+  // 统一的颜色映射范围
+  const GLOBAL_MIN = 0; // 根据需要调整
+  const GLOBAL_MAX = 100; // 根据需要调整
+  const colorScale = chroma.scale('Spectral').domain([GLOBAL_MIN, GLOBAL_MAX]);
 
   useEffect(() => {
     loadFiles();
@@ -22,10 +27,10 @@ const App = () => {
   useEffect(() => {
     if (!mapRef.current) {
       initMap();
-    } else if (selectedFiles.length > 0) {
-      fetchAndRenderTIFF(selectedFiles[0], mapRef.current);
+    } else if (selectedFile) {
+      fetchAndRenderTIFF(selectedFile, mapRef.current);
     }
-  }, [selectedFiles]);
+  }, [selectedFile]);
 
   const loadFiles = async () => {
     setLoading(true);
@@ -39,10 +44,10 @@ const App = () => {
   };
 
   const initMap = () => {
-    mapRef.current = L.map('map').setView([31.2304, 121.4737], 13);
+    mapRef.current = L.map('map').setView([31.2304, 121.4737], 5);
 
     L.tileLayer.chinaProvider('GaoDe.Normal.Map', {
-      maxZoom: 4, // 根据需要调整 maxZoom
+      maxZoom: 8, // 根据需要调整 maxZoom
       attribution: 'Map data &copy; <a href="https://www.amap.com/">高德地图</a>'
     }).addTo(mapRef.current);
   };
@@ -60,16 +65,12 @@ const App = () => {
 
       const georaster = await parseGeoraster(response.data);
 
-      const min = georaster.mins[0];
-      const range = georaster.ranges[0];
-      const scale = chroma.scale('Spectral').domain([1, 0]);
-
       const options = {
         pixelValuesToColorFn: (pixelValues) => {
           const pixelValue = pixelValues[0];
-          if (pixelValue === 0) return null;
-          const scaledPixelValue = (pixelValue - min) / range;
-          return scale(scaledPixelValue).hex();
+          if (pixelValue === 0) return null; // 可以设置透明背景
+          const scaledPixelValue = (pixelValue - GLOBAL_MIN) / (GLOBAL_MAX - GLOBAL_MIN);
+          return colorScale(scaledPixelValue).hex();
         },
         resolution: 256,
         opacity: 0.7,
@@ -83,53 +84,37 @@ const App = () => {
     }
   };
 
-  const handleFileSelection = (file) => {
-    setSelectedFiles((prevSelectedFiles) => {
-      if (prevSelectedFiles.includes(file)) {
-        return prevSelectedFiles.filter((selectedFile) => selectedFile !== file);
-      } else {
-        return [...prevSelectedFiles, file];
-      }
-    });
-  };
-
-  const handleSelectAll = () => {
-    if (selectedFiles.length === files.length) {
-      setSelectedFiles([]);
-    } else {
-      setSelectedFiles(files);
-    }
+  const handleFileSelection = (event) => {
+    setSelectedFile(event.target.value);
   };
 
   return (
-    <div className="app-container">
-      <div className="file-selection">
-        <button onClick={handleSelectAll}>
-          {selectedFiles.length === files.length ? 'Deselect All' : 'Select All'}
-        </button>
-        {loading && <p>Loading...</p>}
-        {!loading && (
-          <div className="scroll-container">
-            {files.map((file, index) => (
-              <div key={index} className="file-item">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={selectedFiles.includes(file)}
-                    onChange={() => handleFileSelection(file)}
-                  />
-                  {file}
-                </label>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="viewer-container">
-        <div id="map" style={{ height: '100vh' }}></div>
-      </div>
+    <div className="app-container" style={{ position: 'relative' }}>
+      <select 
+        value={selectedFile} 
+        onChange={handleFileSelection}
+        style={{
+          position: 'absolute',
+          top: '20px', // 按钮距离顶部的距离
+          left: '20px', // 按钮距离左边的距离
+          padding: '10px 20px', // 增加按钮的 padding
+          fontSize: '36px', // 增加按钮的字体大小
+          cursor: 'pointer',
+          zIndex: 1000 // 确保按钮在地图上层
+        }}
+      >
+        <option value="">Select a file</option>
+        {files.map((file, index) => (
+          <option key={index} value={file}>
+            {file}
+          </option>
+        ))}
+      </select>
+      {loading && <p>Loading...</p>}
+      <div id="map" style={{ height: '100vh' }}></div>
     </div>
   );
+  
 };
 
 export default App;
