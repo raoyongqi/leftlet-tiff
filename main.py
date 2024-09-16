@@ -1,29 +1,36 @@
 # main.py
 
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import JSONResponse, FileResponse
-from pydantic import BaseModel
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import FileResponse, JSONResponse
 import shutil
 import os
-
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List
 app = FastAPI()
 
+# 配置 CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # 允许的来源
+    allow_credentials=True,
+    allow_methods=["*"],  # 允许的HTTP方法
+    allow_headers=["*"],  # 允许的HTTP头
+)
+
 # 文件存储路径
-UPLOAD_DIRECTORY = "uploads"
+UPLOAD_DIRECTORY = "tiff"
 os.makedirs(UPLOAD_DIRECTORY, exist_ok=True)
 
-class TIFFFile(BaseModel):
-    filename: str
-    url: str
 
-@app.post("/upload/")
-async def upload_file(file: UploadFile = File(...)):
-    file_location = os.path.join(UPLOAD_DIRECTORY, file.filename)
-    with open(file_location, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    return {"filename": file.filename, "url": f"/files/{file.filename}"}
 
-@app.get("/files/{filename}")
+@app.get("/files")
+async def list_files():
+    files = [f for f in os.listdir(UPLOAD_DIRECTORY) if os.path.isfile(os.path.join(UPLOAD_DIRECTORY, f))]
+    return files
+
+@app.get("/tiff/{filename}")
 async def get_file(filename: str):
     file_path = os.path.join(UPLOAD_DIRECTORY, filename)
     if os.path.exists(file_path):
