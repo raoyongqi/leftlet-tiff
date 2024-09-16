@@ -12,13 +12,11 @@ import chroma from 'chroma-js';
 const App = () => {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(''); // 改为单选
+  const [selectedFile, setSelectedFile] = useState('');
   const mapRef = useRef(null);
 
-  // 统一的颜色映射范围
-  const GLOBAL_MIN = 0; // 根据需要调整
-  const GLOBAL_MAX = 100; // 根据需要调整
-  const colorScale = chroma.scale('Spectral').domain([GLOBAL_MIN, GLOBAL_MAX]);
+  // 定义从绿到红的渐变
+  const colorScale = chroma.scale(['green', 'red']).domain([0, 1]);
 
   useEffect(() => {
     loadFiles();
@@ -36,18 +34,20 @@ const App = () => {
     setLoading(true);
     try {
       const response = await axios.get('http://localhost:8000/files');
-      setFiles(response.data);
+      // 按名称排序
+      const sortedFiles = response.data.sort((a, b) => a.localeCompare(b));
+      setFiles(sortedFiles);
     } catch (error) {
       console.error("Error loading files:", error);
     }
     setLoading(false);
   };
-
+  
   const initMap = () => {
-    mapRef.current = L.map('map').setView([31.2304, 121.4737], 5);
+    mapRef.current = L.map('map').setView([-20.2744, 100.7751], 5);
 
     L.tileLayer.chinaProvider('GaoDe.Normal.Map', {
-      maxZoom: 8, // 根据需要调整 maxZoom
+      maxZoom: 8,
       attribution: 'Map data &copy; <a href="https://www.amap.com/">高德地图</a>'
     }).addTo(mapRef.current);
   };
@@ -65,12 +65,19 @@ const App = () => {
 
       const georaster = await parseGeoraster(response.data);
 
+      // 计算最小值和最大值
+      const min = Math.min(...georaster.mins);
+      const max = Math.max(...georaster.maxs);
+
+      // 创建从绿色到红色的颜色渐变
+      const scale = chroma.scale(['green', 'red']).domain([min, max]);
+
       const options = {
         pixelValuesToColorFn: (pixelValues) => {
           const pixelValue = pixelValues[0];
           if (pixelValue === 0) return null; // 可以设置透明背景
-          const scaledPixelValue = (pixelValue - GLOBAL_MIN) / (GLOBAL_MAX - GLOBAL_MIN);
-          return colorScale(scaledPixelValue).hex();
+          // 映射到渐变色
+          return scale(pixelValue).hex();
         },
         resolution: 256,
         opacity: 0.7,
