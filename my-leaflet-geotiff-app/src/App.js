@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './App.css';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.chinatmsproviders/src/leaflet.ChineseTmsProviders';
-import 'leaflet.markercluster/dist/leaflet.markercluster'; // 确保你有正确的包
+import 'leaflet.markercluster/dist/leaflet.markercluster';
 import parseGeoraster from 'georaster';
 import GeoRasterLayer from 'georaster-layer-for-leaflet';
 import chroma from 'chroma-js';
@@ -14,9 +14,10 @@ const App = () => {
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState('');
   const mapRef = useRef(null);
-
+  const fetchAndRenderTIFFRef = useRef(null);  // 用于保存 fetchAndRenderTIFF 函数的引用
   // 定义从绿到红的渐变
-  const colorScale = chroma.scale(['green', 'red']).domain([0, 1]);
+  const layerRef = useRef(null); // 用于保存 ECharts 实例
+  const legendsRef = useRef(null); // 用于保存 ECharts 实例
 
   useEffect(() => {
     loadFiles();
@@ -26,7 +27,7 @@ const App = () => {
     if (!mapRef.current) {
       initMap();
     } else if (selectedFile) {
-      fetchAndRenderTIFF(selectedFile, mapRef.current);
+      fetchAndRenderTIFFRef.current(selectedFile, mapRef.current);
     }
   }, [selectedFile]);
 
@@ -34,7 +35,6 @@ const App = () => {
     setLoading(true);
     try {
       const response = await axios.get('http://localhost:8000/files');
-      // 按名称排序
       const sortedFiles = response.data.sort((a, b) => a.localeCompare(b));
       setFiles(sortedFiles);
     } catch (error) {
@@ -52,8 +52,16 @@ const App = () => {
     }).addTo(mapRef.current);
   };
 
-  const fetchAndRenderTIFF = async (filename, map) => {
+  fetchAndRenderTIFFRef.current = async (filename, map) => {
     try {
+      if (layerRef.current) {
+        map.removeLayer(layerRef.current);
+      }
+      // 移除现有的图例
+      if (legendsRef.current) {
+        document.body.removeChild(legendsRef.current);
+      }
+
       const response = await axios.get(`http://localhost:8000/tiff/${filename}`, {
         responseType: 'arraybuffer',
         headers: {
@@ -64,19 +72,14 @@ const App = () => {
       });
 
       const georaster = await parseGeoraster(response.data);
-
-      // 计算最小值和最大值
       const min = Math.min(...georaster.mins);
       const max = Math.max(...georaster.maxs);
-
-      // 创建从绿色到红色的颜色渐变
       const scale = chroma.scale(['green', 'red']).domain([min, max]);
 
       const options = {
         pixelValuesToColorFn: (pixelValues) => {
           const pixelValue = pixelValues[0];
-          if (pixelValue === 0) return null; // 可以设置透明背景
-          // 映射到渐变色
+          if (pixelValue === 0) return null;
           return scale(pixelValue).hex();
         },
         resolution: 256,
@@ -86,10 +89,63 @@ const App = () => {
 
       const layer = new GeoRasterLayer(options);
       layer.addTo(map);
+      layerRef.current = layer
+      // 图例直接通过 CSS 控制位置
+      const newLegendDiv = document.createElement('div');
+      createFixedLegend(min, max, scale, newLegendDiv);
+      legendsRef.current = newLegendDiv;
+    
     } catch (error) {
       console.error("Error loading TIFF:", error);
     }
   };
+  const createFixedLegend = (min, max, scale, legendDiv) => {
+    legendDiv.className = 'fixed-legend';
+  
+    // 设置图例的样式
+    legendDiv.style.position = 'fixed'; // 固定位置
+    legendDiv.style.top = '800px'; // 从页面顶部向下 800px
+    legendDiv.style.left = '20%'; // 从页面左侧向右 20%
+    legendDiv.style.transform = 'translateX(-20%)'; // 调整以使其居中对齐
+    legendDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.8)'; // 半透明背景
+    legendDiv.style.padding = '0'; // 去掉内边距
+    legendDiv.style.border = '1px solid #ccc'; // 边框
+    legendDiv.style.maxHeight = '180px'; // 最大高度限制
+    legendDiv.style.overflowY = 'auto'; // 超出部分滚动
+    legendDiv.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)'; // 添加阴影效果
+
+    // 使用 flex 布局来对齐颜色框和文本
+    legendDiv.style.display = 'flex';
+    legendDiv.style.flexDirection = 'column';
+    legendDiv.style.alignItems = 'flex-start';
+    legendDiv.style.gap = '0'; // 去掉间隙
+    
+    // 分成 5 个区间展示图例
+    const grades = [min, (min + max) / 4, (min + max) / 2, (3 * (min + max)) / 4, max];
+    
+    // 反转区间数组，以确保低值在下方
+    grades.reverse();
+
+    grades.forEach((grade, i) => {
+      const color = getColor(grade, scale);
+      const legendItem = `<div style="display: flex; align-items: center; margin: 0;">
+                            <i style="background:${color}; width: 30px; height: 30px; display: inline-block; margin-right: 10px;"></i> 
+                            <span style="font-size: 28px; margin: 0;">${grade.toFixed(2)} ${grades[i + 1] ? '&ndash; ' + grades[i + 1].toFixed(2) : '+'}</span>
+                          </div>`;
+      legendDiv.innerHTML += legendItem;
+    });
+
+    document.body.appendChild(legendDiv);
+  };
+
+  
+  
+  const getColor = (value, scale) => {
+    // 使用和 TIFF 渲染时相同的颜色比例
+    return scale(value).hex();
+  };
+
+ 
 
   const handleFileSelection = (event) => {
     setSelectedFile(event.target.value);
@@ -102,12 +158,12 @@ const App = () => {
         onChange={handleFileSelection}
         style={{
           position: 'absolute',
-          top: '20px', // 按钮距离顶部的距离
-          left: '20px', // 按钮距离左边的距离
-          padding: '10px 20px', // 增加按钮的 padding
-          fontSize: '36px', // 增加按钮的字体大小
+          top: '20px',
+          left: '20px',
+          padding: '10px 20px',
+          fontSize: '36px',
           cursor: 'pointer',
-          zIndex: 1000 // 确保按钮在地图上层
+          zIndex: 1000
         }}
       >
         <option value="">Select a file</option>
@@ -121,7 +177,6 @@ const App = () => {
       <div id="map" style={{ height: '100vh' }}></div>
     </div>
   );
-  
 };
 
 export default App;

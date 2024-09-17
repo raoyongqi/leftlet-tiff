@@ -36,3 +36,14 @@
     transform: rotate(360deg);
   }
 }
+.fixed-legend {
+  position: fixed;  /* 固定图例 */
+  bottom: 10px;     /* 距离底部10px */
+  left: 10px;       /* 距离左侧10px */
+  background-color: rgba(255, 255, 255, 0.8); /* 半透明背景 */
+  padding: 10px;    /* 内边距 */
+  border-radius: 5px; /* 圆角边框 */
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.2); /* 添加阴影效果 */
+  z-index: 1000;    /* 保证图例位于页面最前 */
+  font-size: 14px;  /* 字体大小 */
+}
