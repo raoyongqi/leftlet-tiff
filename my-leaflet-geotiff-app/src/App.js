@@ -72,6 +72,8 @@ const App = () => {
       });
 
       const georaster = await parseGeoraster(response.data);
+    // 打印 projection 信息
+    console.log(georaster.projection);
       const min = Math.min(...georaster.mins);
       const max = Math.max(...georaster.maxs);
       const scale = chroma.scale(['green', 'red']).domain([min, max]);
@@ -116,24 +118,26 @@ const App = () => {
 
     // 使用 flex 布局来对齐颜色框和文本
     legendDiv.style.display = 'flex';
-    legendDiv.style.flexDirection = 'column';
+    legendDiv.style.flexDirection = 'column-reverse';
     legendDiv.style.alignItems = 'flex-start';
     legendDiv.style.gap = '0'; // 去掉间隙
     
     // 分成 5 个区间展示图例
     const grades = [min, (min + max) / 4, (min + max) / 2, (3 * (min + max)) / 4, max];
     
-    // 反转区间数组，以确保低值在下方
-    grades.reverse();
 
-    grades.forEach((grade, i) => {
-      const color = getColor(grade, scale);
-      const legendItem = `<div style="display: flex; align-items: center; margin: 0;">
-                            <i style="background:${color}; width: 30px; height: 30px; display: inline-block; margin-right: 10px;"></i> 
-                            <span style="font-size: 28px; margin: 0;">${grade.toFixed(2)} ${grades[i + 1] ? '&ndash; ' + grades[i + 1].toFixed(2) : '+'}</span>
-                          </div>`;
-      legendDiv.innerHTML += legendItem;
-    });
+
+  // 遍历 grades 数组生成图例项
+  grades.sort((a, b) => a - b);
+
+  grades.forEach((grade, i) => {
+    const color = getColor(grade, scale);
+    const legendItem = `<div style="display: flex; align-items: center; margin: 0;">
+                          <i style="background:${color}; width: 30px; height: 30px; display: inline-block; margin-right: 10px;"></i> 
+                          <span style="font-size: 28px; margin: 0;">${grade.toFixed(2)} ${grades[i + 1] ? '&ndash; ' + grades[i + 1].toFixed(2) : '+'}</span>
+                        </div>`;
+    legendDiv.innerHTML += legendItem;
+  });
 
     document.body.appendChild(legendDiv);
   };
